@@ -141,7 +141,11 @@ def lineup_plan(league_id: int) -> LineupPlan:
             # seven reads — `my_team`, `competitions`, `teamLineup_read`, `lineup_settings`,
             # `roster_settings`, `inputs_from_lineup`, `plan_lineups` — which is how it came
             # to read the format from a different place than the command did.
-            plans, names, comp = build_plans(TokenStore(session, cipher), league_id, 0)
+            # With the session, so a Classic lega is planned with its scoring rules and the
+            # predictor — the same XI `lineup plan` prints and `lineup submit` sends.
+            plans, names, comp = build_plans(
+                TokenStore(session, cipher), league_id, 0, session=session
+            )
     except (TokenRejected, AppKeyRejected) as exc:
         # The platform answered, and said no. A different fact from being unable to ask —
         # a rejected token is not going to resolve by reloading the page.
@@ -278,6 +282,7 @@ def lineup_submit(request: SubmitRequest) -> SubmitResult:
                 competition=request.competition,
                 arm=request.arm,
                 now=_now,
+                session=session,
             )
     except (TokenRejected, AppKeyRejected, LineupError) as exc:
         return SubmitResult(outcome="refused", reason=str(exc))

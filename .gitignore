@@ -69,3 +69,5 @@ _pdftext.txt
 # unfixed defects on the acting path.
 tasks
 todo
+# scripts/matchday.ps1 run logs
+logs/

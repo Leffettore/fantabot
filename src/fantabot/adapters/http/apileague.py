@@ -336,8 +336,11 @@ def calculate_settings(
 ) -> dict[str, Any]:
     """`GET /onboarding/v1/league/settings/calculate` — the lega's scoring rules: `bnMls`
     (bonus/malus per event), `step` (the goal ladder), `subst` (the auto-substitution
-    config). Returned whole; `domain/lineup/scoring.ScoringRules.from_settings` parses it,
-    because the field names are dense and several of their meanings are still assumed."""
+    config: `ssnum` the cap), and the modifiers (`smodd` the defence one, `smodcp` the
+    captain one; null when the lega does not play it). Returned whole, and parsed twice:
+    `domain/lineup/scoring.ScoringRules.from_settings` for the projection, and
+    `domain/lineup/rules` for the Classic modifiers — the field names are dense and several
+    of their meanings are still assumed."""
     return _get(
         CALCULATE_SETTINGS_PATH, league_id, store=store, transport=transport,
         timeout=timeout, now=now,

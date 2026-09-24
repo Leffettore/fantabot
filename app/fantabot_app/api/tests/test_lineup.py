@@ -131,7 +131,7 @@ def test_the_route_forwards_the_competition_build_plans_resolved(monkeypatch) ->
     )
     monkeypatch.setattr(token_store, "TokenStore", lambda *_a: object())
     monkeypatch.setattr(
-        lineup_submit, "build_plans", lambda *_a: ([planned], {1: "Mandas", 9: "Rovella"}, 77)
+        lineup_submit, "build_plans", lambda *_a, **_k: ([planned], {1: "Mandas", 9: "Rovella"}, 77)
     )
 
     body = TestClient(app).get("/api/v1/lineup/plan?league_id=4103937").json()

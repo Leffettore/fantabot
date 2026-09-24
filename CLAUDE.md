@@ -241,6 +241,42 @@ src/fantabot/
   Two fields are deliberately open, both confirmed to save: `capt` is empty (no captain)
   and `swtcMdl` mirrors `mdl`. Submission keeps the usual two locks — `FANTABOT_AUTO_ACT`
   **and** `--arm` — and is a dry run by default.
+- **Classic extras and every lega at once — automated 2026-09-23.** `fantabot lineup
+  leagues` classifies every lega in `league_tokens` (the operator's real leghe; the ids
+  elsewhere in this file came with the clone), and `lineup submit-all --arm` fields every
+  one with an open matchday, behind the same two locks. `scripts/matchday.ps1` runs it
+  from Task Scheduler (`fantabot-matchday`, 11:00 and 17:00). The XI is ranked by
+  `domain/lineup/predict` (play probability × fantavoto if he plays, blended with the
+  platform's `indexCompare`; `--no-predict` is the ablation). Captain/vice (`capt`) and
+  the switch (`swtcA` → `swtcB`) are chosen in `domain/lineup/extras`, gated on the
+  measured `lcap`/`lswi` values only; the body was captured with both set on 2026-09-23,
+  `tests/fixtures/lineup/submit_capt_switch.json`. Three things measured live that the
+  old code had wrong: a Classic `lineUpInfo` row has no `fcrle` (the role is `role: [n]`);
+  a championship beside a `Coppa` is not ambiguous (one lineup covers both, `allComp`);
+  and `lineUpInfo.pid` **does** join `players.id`. The prediction weights are declared
+  priors and are **not yet backtested**. Every one of the operator's Classic leghe plays
+  the **modificatore difesa**, earned only when at least four defenders get a vote. Each
+  lega's own table and substitution cap come from `GET /onboarding/v1/league/settings/calculate`
+  (`smodd`, `subst.ssnum`; `fantabot lineup rules` prints them), parsed in
+  `domain/lineup/rules.py` — the band layout is inferred from the table's length and checked.
+  A back four or five (`DEFENCE_MODIFIER_FORMATIONS`) is credited
+  `P(four defenders vote) × E[bonus]` (`domain/lineup/defence.py`: `P` under the cap, `E` from
+  each player's `vote_if_plays` over the lega's bands, `VOTE_SD` a declared prior) and every
+  module competes on that total. On a lega whose switch crosses roles (`lswi` 3, 3677376) the
+  riskiest defender may be switched for a bench midfielder when that is worth more, `swtcMdl`
+  naming the module after the swap — captured 2026-09-23 (433, Delprato → Chukwueze,
+  `swtcMdl` 343), `tests/fixtures/lineup/submit_cross_role_switch.json`. 3677376 also plays a
+  captain modifier (`smodcp`, the captain's *vote* → −1.5…+1.5, one value per half point):
+  there `extras.choose_captains` takes the (captain, vice) pair maximising
+  `p_c·E[bonus(c)] + (1−p_c)·p_v·E[bonus(v)]`, so a doubtful high-vote captain can be right
+  when the vice is sure; the pair's value is added to the plan total.
+  **Where it lives after the merge onto `development`:** the rules read and the
+  predictor are `application/lineup_enrich.py`, applied by `lineup_submit.build_inputs`
+  whenever it is handed a database `session` — so `lineup plan`, `lineup submit`,
+  `submit-all`, `GET /lineup/plan` and `POST /lineup/submit` all plan the same XI. Without a
+  session (`lineup_projection`, `lineup_refresh`) the inputs are the plain `indexCompare`
+  ones. `submit-all` runs each open lega through `submit_lineup` as a **scheduled** run, so
+  it inherits the kickoff cutoff, the positional guard, the read-back and the run record.
 - ~~**The lega itself was not in the database**~~ **Resolved 2026-09-02** by
   `fantabot lega sync`. Three things it settled, each of which had been recorded here
   or in `docs/leghe-api.md` as unknown:

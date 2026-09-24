@@ -142,6 +142,9 @@ def _never_the_operators_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     did not call it.
     """
     monkeypatch.setenv("HOME", str(tmp_path))
+    # Windows resolves `Path.home()` from `USERPROFILE`, not `HOME`: without this the
+    # records above land in the operator's real `~/.fantabot` on a Windows checkout.
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
 
 
 def _fakes_plan(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -441,13 +444,13 @@ def test_plan_and_submit_build_their_plans_through_the_same_door(
 
     real = lineup_submit.build_plans
 
-    def one_door(store: Any, league_id: int, competition: int) -> Any:
+    def one_door(store: Any, league_id: int, competition: int, **kwargs: Any) -> Any:
         # Delegates, then rewrites the names. The marker travels through whatever the
         # command prints, so this proves the *return value* is used and not merely that the
         # function was entered — a spy that only counted calls would still pass with a
         # second implementation sitting next to it.
         called.append("build_plans")
-        plans, names, comp = real(store, league_id, competition)
+        plans, names, comp = real(store, league_id, competition, **kwargs)
         return plans, dict.fromkeys(names, "Sentinel"), comp
 
     monkeypatch.setattr(lineup_submit, "build_plans", one_door)
@@ -1121,3 +1124,99 @@ class TestTheShadowFlag:
             "a projection submit built a shadow projector, so a stale history would have "
             "been sent rather than fallen back from"
         )
+
+
+# --- submit-all: every stored lega, classified first ------------------------
+
+
+def _submit_all_fakes(
+    monkeypatch: pytest.MonkeyPatch, *, auto_act: bool, states: dict[int, str]
+) -> list[tuple[int, Any]]:
+    from fantabot import config
+    from fantabot.domain.lineup.activity import Activity
+    from fantabot.interface import lineup as lineup_module
+
+    _submit_fakes(monkeypatch, auto_act=auto_act)
+    monkeypatch.setattr(
+        lineup_module, "_stored_leagues", lambda _store: [(lid, f"L{lid}") for lid in states]
+    )
+    monkeypatch.setattr(
+        lineup_module,
+        "_classify",
+        lambda _store, lid: Activity(states[lid], "because", competition=311681),
+    )
+    posted: list[tuple[int, Any]] = []
+    from fantabot.adapters.http import apileague
+
+    monkeypatch.setattr(
+        apileague, "teamLineup_submit", lambda lid, body, **k: posted.append((lid, body))
+    )
+    monkeypatch.setattr(config.settings, "fantabot_leagues_exclude", "")
+    # `submit-all` is a scheduled submit, so the platform's matchday must be the plan's (the
+    # fake roster plans Serie A matchday 3) and its start still ahead.
+    monkeypatch.setattr(
+        apileague, "league_status", lambda *a, **k: {"mstr": "2099-01-01T00:00:00", "mday": 3}
+    )
+    return posted
+
+
+def test_submit_all_only_fields_open_leagues(monkeypatch: pytest.MonkeyPatch) -> None:
+    posted = _submit_all_fakes(
+        monkeypatch, auto_act=True, states={1: "open", 2: "no_competition", 3: "idle"}
+    )
+
+    result = runner.invoke(app, ["lineup", "submit-all", "--arm"])
+
+    assert result.exit_code == 0, result.output
+    assert [lid for lid, _ in posted] == [1]
+    assert "no_competition" in result.output
+
+
+def test_submit_all_is_a_dry_run_without_both_locks(monkeypatch: pytest.MonkeyPatch) -> None:
+    posted = _submit_all_fakes(monkeypatch, auto_act=True, states={1: "open"})
+
+    result = runner.invoke(app, ["lineup", "submit-all"])  # no --arm
+
+    assert result.exit_code == 0
+    assert posted == []
+    assert "dry run" in result.output
+
+
+def test_submit_all_skips_an_excluded_lega(monkeypatch: pytest.MonkeyPatch) -> None:
+    from fantabot import config
+
+    posted = _submit_all_fakes(monkeypatch, auto_act=True, states={1: "open", 2: "open"})
+    monkeypatch.setattr(config.settings, "fantabot_leagues_exclude", "2")
+
+    result = runner.invoke(app, ["lineup", "submit-all", "--arm"])
+
+    assert result.exit_code == 0, result.output
+    assert [lid for lid, _ in posted] == [1]
+    assert "excluded" in result.output
+
+
+def test_submit_all_does_not_resubmit_past_the_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from fantabot.adapters.http import apileague
+
+    posted = _submit_all_fakes(monkeypatch, auto_act=True, states={1: "open"})
+    monkeypatch.setattr(
+        apileague, "league_status", lambda *a, **k: {"mstr": "2000-01-01T00:00:00", "mday": 3}
+    )
+
+    result = runner.invoke(app, ["lineup", "submit-all", "--arm"])
+
+    assert result.exit_code == 0, result.output
+    assert posted == []
+    assert "not resubmitting" in result.output
+
+
+def test_submit_all_reports_a_relogin_and_exits_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    posted = _submit_all_fakes(monkeypatch, auto_act=True, states={1: "relogin", 2: "open"})
+
+    result = runner.invoke(app, ["lineup", "submit-all", "--arm"])
+
+    assert result.exit_code == 1
+    assert [lid for lid, _ in posted] == [2], "one lega's token must not stop the others"
+    assert "failed: 1" in result.output

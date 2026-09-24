@@ -22,11 +22,12 @@ from collections.abc import Collection
 from datetime import date
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.orm import aliased
 
 from fantabot.adapters.persistence.models.aste import ASTA_TYPES, Asta, AstaAssignment
 from fantabot.adapters.persistence.models.league import LeagueCompetition, LeagueFixture
 from fantabot.adapters.persistence.models.matches import MatchGrain
-from fantabot.adapters.persistence.models.reference import Quotazione
+from fantabot.adapters.persistence.models.reference import Quotazione, Statistica, Team
 from fantabot.adapters.persistence.repositories._base import RepositoryBase
 from fantabot.adapters.persistence.repositories.sentiment import SentimentReadRepository
 from fantabot.domain.lineup.backtest_corpus import RoomRow, SaleRow
@@ -36,6 +37,9 @@ from fantabot.domain.shared.values import SentimentRow
 
 #: The listone this lega plays. Roles and `qi` differ between the two.
 MANTRA = "mantra"
+
+#: Fewer graded games than this and last season's average is noise, not a prior.
+MIN_PRIOR_GAMES = 5
 
 
 class LineupHistoryRepository(RepositoryBase):
@@ -135,6 +139,93 @@ class LineupHistoryRepository(RepositoryBase):
         wanted = {int(player_id) for player_id in player_ids}
         latest = SentimentReadRepository(self.session).all_latest()
         return {int(key): row for key, row in latest.items() if int(key) in wanted}
+
+    # -- The Classic predictor's reads (`application/lineup_enrich`, `domain/lineup/predict`):
+    # last season's fantamedia and plain vote, past clubs, and the scores that set team
+    # strength. The Classic listone and fantacalcio grades, where the rest reads Mantra.
+
+    def latest_season(self) -> str | None:
+        """The newest `stagione` in `quotazioni` — the season being played."""
+        return self.session.execute(select(func.max(Quotazione.stagione))).scalar_one_or_none()
+
+    def prior_fantamedia(self, ids: Collection[int], stagione: str) -> dict[int, float]:
+        """`{player_id: media_fantavoto}` for `stagione` (fantacalcio grades, Classic listone),
+        for players with at least `MIN_PRIOR_GAMES` games."""
+        rows = self.session.execute(
+            select(Statistica.player_id, Statistica.media_fantavoto).where(
+                Statistica.stagione == stagione,
+                Statistica.fonte == "fantacalcio",
+                Statistica.listone == "classic",
+                Statistica.player_id.in_(list(ids)),
+                Statistica.media_fantavoto.is_not(None),
+                Statistica.partite_giocate >= MIN_PRIOR_GAMES,
+            )
+        ).all()
+        return {int(pid): float(fm) for pid, fm in rows}
+
+    def prior_media_voto(self, ids: Collection[int], stagione: str) -> dict[int, float]:
+        """`{player_id: media_voto}` — the plain-vote twin of `prior_fantamedia`, the prior for
+        the modificatore difesa's vote forecast. Same source, same games floor."""
+        rows = self.session.execute(
+            select(Statistica.player_id, Statistica.media_voto).where(
+                Statistica.stagione == stagione,
+                Statistica.fonte == "fantacalcio",
+                Statistica.listone == "classic",
+                Statistica.player_id.in_(list(ids)),
+                Statistica.media_voto.is_not(None),
+                Statistica.partite_giocate >= MIN_PRIOR_GAMES,
+            )
+        ).all()
+        return {int(pid): float(v) for pid, v in rows}
+
+    def past_clubs(self, ids: Collection[int], before: str) -> dict[int, frozenset[str]]:
+        """`{player_id: club codes}` he was listed at in any season before `before`."""
+        rows = self.session.execute(
+            select(Quotazione.player_id, Quotazione.squadra)
+            .where(
+                Quotazione.stagione < before,
+                Quotazione.listone == "classic",
+                Quotazione.player_id.in_(list(ids)),
+            )
+            .distinct()
+        ).all()
+        out: dict[int, set[str]] = {}
+        for pid, club in rows:
+            out.setdefault(int(pid), set()).add(club)
+        return {pid: frozenset(clubs) for pid, clubs in out.items()}
+
+    def fixture_scores(self, stagione: str) -> list[tuple[str, str, int, int]]:
+        """Every played fixture of `stagione` as `(home, away, home_goals, away_goals)` codes.
+
+        `match_grain` is one row per player; a fixture is its distinct
+        `(giornata, squadra_raw, avversario_raw)` — `squadra_raw` is the home side for every
+        row of a match block (`models/matches.py`), which is what makes this reading correct.
+        Full club names are bridged to codes through `teams`.
+        """
+        home_t = aliased(Team)
+        away_t = aliased(Team)
+        rows = self.session.execute(
+            select(
+                home_t.codice,
+                away_t.codice,
+                MatchGrain.gol_squadra,
+                MatchGrain.gol_avversario,
+            )
+            .join(
+                home_t,
+                (home_t.stagione == MatchGrain.stagione)
+                & (home_t.nome_completo == MatchGrain.squadra_raw),
+            )
+            .join(
+                away_t,
+                (away_t.stagione == MatchGrain.stagione)
+                & (away_t.nome_completo == MatchGrain.avversario_raw),
+            )
+            .where(MatchGrain.stagione == stagione)
+            .distinct(MatchGrain.giornata, MatchGrain.squadra_raw, MatchGrain.avversario_raw)
+        ).all()
+        return [(h, a, int(hg), int(ag)) for h, a, hg, ag in rows]
+
 
 
 def _appearance(record: MatchGrain) -> HistoryAppearance:

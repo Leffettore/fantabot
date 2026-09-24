@@ -284,6 +284,9 @@ class Settings(BaseSettings):
     fantabot_lineup_model: str | None = None
     fantabot_lineup_sub_mode: str | None = None
     fantabot_lineup_news: str | None = None
+    # Comma-separated lega ids `lineup submit-all` never touches, even when a matchday is
+    # open in them. Every other stored lega is classified and fielded if open.
+    fantabot_leagues_exclude: str = ""
 
     # The driver must stay +psycopg2. SPEC assumption 3: fantabot is a batch
     # process, and `postgresql+asyncpg://` breaks `alembic upgrade head`.

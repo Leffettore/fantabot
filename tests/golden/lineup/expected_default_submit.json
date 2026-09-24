@@ -1,6 +1,7 @@
 {
  "plans": [
   {
+   "all_comp": false,
    "bench": [
     4360,
     5504,
@@ -15,9 +16,15 @@
     4947,
     2155
    ],
+   "captain_bonus_ev": null,
+   "captains": [],
    "cmday": 6,
    "competition": 311681,
+   "defence_avg_vote": null,
+   "defence_bonus_ev": null,
+   "defence_bonus_p": null,
    "guard": "",
+   "max_subs": null,
    "mday": 4,
    "module": "3421",
    "starts": [
@@ -33,9 +40,12 @@
     7126,
     6052
    ],
+   "switch": null,
+   "switch_module": null,
    "tid": 18780035
   },
   {
+   "all_comp": false,
    "bench": [
     4360,
     5504,
@@ -50,9 +60,15 @@
     4947,
     2155
    ],
+   "captain_bonus_ev": null,
+   "captains": [],
    "cmday": 6,
    "competition": 311681,
+   "defence_avg_vote": null,
+   "defence_bonus_ev": null,
+   "defence_bonus_p": null,
    "guard": "",
+   "max_subs": null,
    "mday": 4,
    "module": "4231",
    "starts": [
@@ -68,9 +84,12 @@
     7126,
     6052
    ],
+   "switch": null,
+   "switch_module": null,
    "tid": 18780035
   },
   {
+   "all_comp": false,
    "bench": [
     4360,
     1850,
@@ -85,9 +104,15 @@
     4947,
     2155
    ],
+   "captain_bonus_ev": null,
+   "captains": [],
    "cmday": 6,
    "competition": 311681,
+   "defence_avg_vote": null,
+   "defence_bonus_ev": null,
+   "defence_bonus_p": null,
    "guard": "",
+   "max_subs": null,
    "mday": 4,
    "module": "4141",
    "starts": [
@@ -103,9 +128,12 @@
     7181,
     6052
    ],
+   "switch": null,
+   "switch_module": null,
    "tid": 18780035
   },
   {
+   "all_comp": false,
    "bench": [
     4360,
     7126,
@@ -120,9 +148,15 @@
     4947,
     2155
    ],
+   "captain_bonus_ev": null,
+   "captains": [],
    "cmday": 6,
    "competition": 311681,
+   "defence_avg_vote": null,
+   "defence_bonus_ev": null,
+   "defence_bonus_p": null,
    "guard": "",
+   "max_subs": null,
    "mday": 4,
    "module": "3511",
    "starts": [
@@ -138,9 +172,12 @@
     6875,
     6052
    ],
+   "switch": null,
+   "switch_module": null,
    "tid": 18780035
   },
   {
+   "all_comp": false,
    "bench": [
     4360,
     7126,
@@ -155,9 +192,15 @@
     4947,
     2155
    ],
+   "captain_bonus_ev": null,
+   "captains": [],
    "cmday": 6,
    "competition": 311681,
+   "defence_avg_vote": null,
+   "defence_bonus_ev": null,
+   "defence_bonus_p": null,
    "guard": "",
+   "max_subs": null,
    "mday": 4,
    "module": "352",
    "starts": [
@@ -173,9 +216,12 @@
     6052,
     6875
    ],
+   "switch": null,
+   "switch_module": null,
    "tid": 18780035
   },
   {
+   "all_comp": false,
    "bench": [
     4360,
     7126,
@@ -190,9 +236,15 @@
     4947,
     2155
    ],
+   "captain_bonus_ev": null,
+   "captains": [],
    "cmday": 6,
    "competition": 311681,
+   "defence_avg_vote": null,
+   "defence_bonus_ev": null,
+   "defence_bonus_p": null,
    "guard": "",
+   "max_subs": null,
    "mday": 4,
    "module": "4312",
    "starts": [
@@ -208,9 +260,12 @@
     6052,
     4179
    ],
+   "switch": null,
+   "switch_module": null,
    "tid": 18780035
   },
   {
+   "all_comp": false,
    "bench": [
     4360,
     7126,
@@ -225,9 +280,15 @@
     4947,
     2155
    ],
+   "captain_bonus_ev": null,
+   "captains": [],
    "cmday": 6,
    "competition": 311681,
+   "defence_avg_vote": null,
+   "defence_bonus_ev": null,
+   "defence_bonus_p": null,
    "guard": "",
+   "max_subs": null,
    "mday": 4,
    "module": "433",
    "starts": [
@@ -243,9 +304,12 @@
     6052,
     4179
    ],
+   "switch": null,
+   "switch_module": null,
    "tid": 18780035
   },
   {
+   "all_comp": false,
    "bench": [
     4360,
     7126,
@@ -260,9 +324,15 @@
     4947,
     2155
    ],
+   "captain_bonus_ev": null,
+   "captains": [],
    "cmday": 6,
    "competition": 311681,
+   "defence_avg_vote": null,
+   "defence_bonus_ev": null,
+   "defence_bonus_p": null,
    "guard": "",
+   "max_subs": null,
    "mday": 4,
    "module": "3412",
    "starts": [
@@ -278,9 +348,12 @@
     6052,
     4179
    ],
+   "switch": null,
+   "switch_module": null,
    "tid": 18780035
   },
   {
+   "all_comp": false,
    "bench": [
     4360,
     7126,
@@ -295,9 +368,15 @@
     4947,
     2155
    ],
+   "captain_bonus_ev": null,
+   "captains": [],
    "cmday": 6,
    "competition": 311681,
+   "defence_avg_vote": null,
+   "defence_bonus_ev": null,
+   "defence_bonus_p": null,
    "guard": "",
+   "max_subs": null,
    "mday": 4,
    "module": "343",
    "starts": [
@@ -313,9 +392,12 @@
     6052,
     4179
    ],
+   "switch": null,
+   "switch_module": null,
    "tid": 18780035
   },
   {
+   "all_comp": false,
    "bench": [
     4360,
     7126,
@@ -330,9 +412,15 @@
     4947,
     2155
    ],
+   "captain_bonus_ev": null,
+   "captains": [],
    "cmday": 6,
    "competition": 311681,
+   "defence_avg_vote": null,
+   "defence_bonus_ev": null,
+   "defence_bonus_p": null,
    "guard": "",
+   "max_subs": null,
    "mday": 4,
    "module": "4411",
    "starts": [
@@ -348,9 +436,12 @@
     6875,
     6052
    ],
+   "switch": null,
+   "switch_module": null,
    "tid": 18780035
   },
   {
+   "all_comp": false,
    "bench": [
     4360,
     7126,
@@ -365,9 +456,15 @@
     4947,
     2155
    ],
+   "captain_bonus_ev": null,
+   "captains": [],
    "cmday": 6,
    "competition": 311681,
+   "defence_avg_vote": null,
+   "defence_bonus_ev": null,
+   "defence_bonus_p": null,
    "guard": "",
+   "max_subs": null,
    "mday": 4,
    "module": "442",
    "starts": [
@@ -383,6 +480,8 @@
     6052,
     6875
    ],
+   "switch": null,
+   "switch_module": null,
    "tid": 18780035
   }
  ],

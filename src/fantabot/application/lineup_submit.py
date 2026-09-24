@@ -43,10 +43,14 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from datetime import datetime
 
+    from sqlalchemy.orm import Session
+
     from fantabot.adapters.files.lineup_runs import LineupRun, LineupShadow
     from fantabot.adapters.tokens.store import TokenStore
+    from fantabot.application.lineup_enrich import Warn
     from fantabot.application.lineup_planner import LineupInputs
     from fantabot.domain.lineup.models import PlannedLineup
+    from fantabot.domain.lineup.predict import Prediction
 
 #: Why a submit did not happen. Names, not sentences — see the module docstring.
 #:
@@ -204,7 +208,13 @@ class SubmitOutcome:
 
 
 def build_inputs(
-    store: TokenStore, league_id: int, competition: int
+    store: TokenStore,
+    league_id: int,
+    competition: int,
+    *,
+    session: Session | None = None,
+    predict: bool = True,
+    warn: Warn | None = None,
 ) -> tuple[LineupInputs, dict[int, str], int]:
     """The reads behind a plan: roster, settings and coordinates, as `LineupInputs`.
 
@@ -216,8 +226,14 @@ def build_inputs(
 
     The format is detected, never configured — `sroles=1` is Classic, `sroles=2` is Mantra.
     This is the cron path, so a flag the operator must remember per lega is a footgun.
+
+    **`session` switches on the Classic extras** (`application/lineup_enrich`): the lega's
+    scoring rules and, unless `predict` is False, the predictor, which reads its history from
+    the database. Without a session the inputs are exactly the plain `indexCompare` ones —
+    which is what `lineup_projection` and `lineup_refresh` ask for. Rule problems go to `warn`.
     """
     from fantabot.adapters.http import apileague
+    from fantabot.application.lineup_enrich import enrich
     from fantabot.application.lineup_planner import inputs_from_lineup
     from fantabot.domain.lineup.competition import resolve_competition
 
@@ -232,20 +248,42 @@ def build_inputs(
     lineup_conf = apileague.lineup_settings(league_id, store=store)
     rosters = apileague.roster_settings(league_id, store=store)
     fmt = "classic" if int(rosters.get("sroles", 2)) == 1 else "mantra"
+    lineup_info = body.get("lineUpInfo", []) or []
     inputs, names = inputs_from_lineup(
-        body.get("teamLineupDto", {}), body.get("lineUpInfo", []), lineup_conf, comp,
+        body.get("teamLineupDto", {}), lineup_info, lineup_conf, comp,
         tid=tid, fmt=fmt,
     )
+    if session is not None:
+        inputs = enrich(
+            inputs, store, league_id, lineup_info, session=session, predict=predict,
+            **({"warn": warn} if warn is not None else {}),
+        )
     return inputs, names, comp
 
 
 def build_plans(
-    store: TokenStore, league_id: int, competition: int
+    store: TokenStore,
+    league_id: int,
+    competition: int,
+    *,
+    session: Session | None = None,
+    predict: bool = True,
+    warn: Warn | None = None,
+    forecast: dict[int, Prediction] | None = None,
 ) -> tuple[list[PlannedLineup], dict[int, str], int]:
-    """`build_inputs`, ranked by the platform's own `indexCompare` — the default model."""
+    """`build_inputs`, ranked by the default model: the platform's own `indexCompare`, or —
+    for a Classic lega given a `session` — the predictor's blended score, with captain,
+    switch and the modificatore difesa chosen per plan.
+
+    `forecast`, when given, is filled with the predictions the plan was ranked on (empty
+    when none were used) — what `lineup plan --explain` prints, without a second read."""
     from fantabot.application.lineup_planner import plan_lineups
 
-    inputs, names, comp = build_inputs(store, league_id, competition)
+    inputs, names, comp = build_inputs(
+        store, league_id, competition, session=session, predict=predict, warn=warn
+    )
+    if forecast is not None and inputs.predictions:
+        forecast.update(inputs.predictions)
     return plan_lineups(inputs), names, comp
 
 
@@ -260,6 +298,8 @@ def submit_lineup(
     scheduled: bool = False,
     model: str | None = None,
     projector: Projector | None = None,
+    session: Session | None = None,
+    predict: bool = True,
 ) -> SubmitOutcome:
     """Build the XI and submit it — behind two locks, a dry run by default.
 
@@ -283,6 +323,10 @@ def submit_lineup(
     A surface asked for `projection` with no projector **refuses** (`MODEL_NOT_ON_SURFACE`),
     before the arm check, rather than quietly POSTing `indexCompare` under a record that
     says `projection`.
+
+    `session` and `predict` are `build_plans`'s: a Classic lega given a session is planned
+    with its scoring rules and the predictor. A rule that could not be read is a warning on
+    the outcome, never a refusal.
     """
     from fantabot.adapters.http import apileague
     from fantabot.application.containment import contained
@@ -292,10 +336,14 @@ def submit_lineup(
     from fantabot.domain.tokens.errors import TokenError
 
     asked = chosen_model() if model is None else parse_model(model)
-    plans, names, comp = build_plans(store, league_id, competition)
+    rule_warnings: list[str] = []
+    plans, names, comp = build_plans(
+        store, league_id, competition,
+        session=session, predict=predict, warn=rule_warnings.append,
+    )
     arming = decide_arming(arm=arm, auto_act=auto_act)
     chose, fallback, shadow = INDEXCOMPARE, "", None
-    warnings: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = tuple(rule_warnings)
 
     def outcome(**over: Any) -> SubmitOutcome:
         """The four facts every outcome carries, so a return site states only its own."""

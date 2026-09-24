@@ -1,4 +1,4 @@
-"""`fantabot lineup` — read, plan and submit the weekly Mantra formazione.
+"""`fantabot lineup` — read, plan and submit the weekly formazione (Classic or Mantra).
 
 Typer only, like the rest of `interface/`. The network calls go through
 `adapters/http/apileague`'s `gaming/v1` client; the value model, schema and matcher live in
@@ -21,6 +21,7 @@ import typer
 from rich.markup import escape
 
 from fantabot.application.containment import contained
+from fantabot.domain.lineup.activity import Activity
 from fantabot.domain.lineup.deadline import is_past_deadline as _is_past_deadline
 from fantabot.interface.console import console
 
@@ -34,6 +35,14 @@ if TYPE_CHECKING:
     from fantabot.application.lineup_submit import Projected, Projector
     from fantabot.domain.lineup.freshness import Freshness
     from fantabot.domain.lineup.models import PlannedLineup
+    from fantabot.domain.lineup.predict import Prediction
+
+_NO_PREDICT_HELP = "Rank on the platform's indexCompare only: no predictor, no captain/switch."
+
+
+def _warn(message: str) -> None:
+    """A Classic extra that could not be read (`application/lineup_enrich`), said out loud."""
+    console.print(f"[yellow]{escape(message)}[/yellow]")
 
 
 #: Re-exported: it moved to `domain/lineup/deadline.py` in 3.2 so `application/` could use
@@ -119,11 +128,58 @@ def format_plan(plan: PlannedLineup, names: Mapping[int, str]) -> list[str]:
     def nm(pid: int) -> str:
         return names.get(pid, str(pid))
 
-    return [
+    lines = [
         f"module {plan.module}  (league matchday {plan.mday}, Serie A {plan.cmday})",
         "XI:    " + ", ".join(nm(p) for p in plan.starts),
         "bench: " + ", ".join(nm(p) for p in plan.bench),
     ]
+    if plan.captains:
+        worth = (
+            f"  (captain modifier worth {plan.captain_bonus_ev:+.2f})"
+            if plan.captain_bonus_ev is not None
+            else ""
+        )
+        lines.append("captain: " + " / vice ".join(nm(p) for p in plan.captains) + worth)
+    if plan.switch:
+        into = f" (module becomes {plan.switch_module})" if plan.switch_module else ""
+        lines.append(f"switch: {nm(plan.switch[0])} -> {nm(plan.switch[1])}{into}")
+    if plan.defence_bonus_p is not None:
+        cap = f" (subs cap {plan.max_subs})" if plan.max_subs is not None else ""
+        worth = ""
+        if plan.defence_avg_vote is not None and plan.defence_bonus_ev is not None:
+            worth = (
+                f" · avg vote ~{plan.defence_avg_vote:.2f} -> worth "
+                f"+{plan.defence_bonus_ev:.2f}"
+            )
+        lines.append(
+            f"defence modifier: P(4 defenders vote) {plan.defence_bonus_p:.0%}{cap}{worth}"
+        )
+    return lines
+
+
+def format_predictions(
+    plan: PlannedLineup, names: Mapping[int, str], predictions: Mapping[int, Prediction]
+) -> list[str]:
+    """One line per rosa player, XI first: play probability, fantavoto if he plays, score and
+    the factors that moved it. Pure."""
+
+    def line(tag: str, pid: int) -> str:
+        name = names.get(pid, str(pid))
+        p = predictions.get(pid)
+        if p is None:
+            return f"  {tag} {name:<18} (no prediction)"
+        f = p.factors
+        return (
+            f"  {tag} {name:<18} play {p.p_play:4.0%}  fv {p.fv_if_plays:4.2f}"
+            f"  score {p.score:5.2f}  [base {f['baseline']:.2f} opp {f['opponent']:.2f}"
+            f" venue {f['venue']:.2f} ex {f['ex_team']:.2f} ic {f['index_compare']:.2f}]"
+        )
+
+    return (
+        ["forecast (XI, then bench):"]
+        + [line("XI", pid) for pid in plan.starts]
+        + [line("  ", pid) for pid in plan.bench]
+    )
 
 
 #: The two value models `plan` can rank on. `indexcompare` is the platform's own rating and
@@ -259,6 +315,8 @@ def _plan(
         "--model",
         help=f"Value model: {INDEXCOMPARE} or {PROJECTION}. Empty reads FANTABOT_LINEUP_MODEL.",
     ),
+    no_predict: bool = typer.Option(False, "--no-predict", help=_NO_PREDICT_HELP),
+    explain: bool = typer.Option(False, "--explain", help="Print every player's forecast."),
 ) -> None:
     """Build and print the best legal formation for the current matchday. **No submit.**"""
     from sqlalchemy.exc import SQLAlchemyError
@@ -290,7 +348,11 @@ def _plan(
             # made them stay that way: a fix to the format detection would have landed in
             # one, leaving the operator previewing an XI built the old way and submitting a
             # different one, with the whole suite green.
-            plans, names, _ = build_plans(store, league_id, competition)
+            predictions: dict[int, Prediction] = {}
+            plans, names, _ = build_plans(
+                store, league_id, competition,
+                session=session, predict=not no_predict, warn=_warn, forecast=predictions,
+            )
     except (TokenError, LineupError) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from None
@@ -300,6 +362,9 @@ def _plan(
 
     for line in format_plan(plans[0], names):
         console.print(line)
+    if explain and predictions:
+        for line in format_predictions(plans[0], names, predictions):
+            console.print(line, markup=False)
 
 
 def _plan_projection(league_id: int, competition: int) -> None:
@@ -393,6 +458,7 @@ def _submit(
         "--refresh",
         help="After the record is written, bring the history up to date in a bounded child.",
     ),
+    no_predict: bool = typer.Option(False, "--no-predict", help=_NO_PREDICT_HELP),
 ) -> None:
     """Build the formation and submit it — **behind two locks, dry run by default.**
 
@@ -474,6 +540,8 @@ def _submit(
                     if shadow
                     else None
                 ),
+                session=session,
+                predict=not no_predict,
             )
     except (TokenError, LineupError) as exc:
         # Recorded before anything else: these stop the run before a plan exists, which is
@@ -1032,6 +1100,256 @@ def _shadow_report(
         raise typer.Exit(code=1)
 
 
+def _excluded_leagues(raw: str) -> set[int]:
+    """`FANTABOT_LEAGUES_EXCLUDE` (comma-separated ids) as a set; junk entries are ignored."""
+    return {int(part) for part in raw.replace(" ", "").split(",") if part.isdigit()}
+
+
+def _classify(store: TokenStore, league_id: int) -> Activity:
+    """One lega's `Activity`, from four reads. Token trouble is `relogin`, a 4xx is `gone`;
+    any other failure is `error` and names itself, so one bad lega never hides the rest."""
+    from fantabot.adapters.http import apileague
+    from fantabot.domain.lineup.activity import competition_activity, lineup_activity
+    from fantabot.domain.tokens.errors import (
+        ApiUnavailable,
+        TokenError,
+        TokenExpired,
+        TokenMissing,
+        TokenRejected,
+    )
+
+    try:
+        status = apileague.league_status(league_id, store=store)
+        tid = int(apileague.my_team(league_id, store=store)["id"])
+        pending = competition_activity(
+            apileague.competitions(league_id, store=store),
+            tid=tid,
+            serie_a_matchday=int(status.get("mday") or 0),
+        )
+        if pending.state != "idle" or pending.competition is None:
+            return pending
+        body = apileague.teamLineup_read(league_id, pending.competition, store=store)
+        return lineup_activity(pending, body.get("teamLineupDto") or {})
+    except (TokenExpired, TokenMissing, TokenRejected) as exc:
+        return Activity("relogin", str(exc))
+    except ApiUnavailable as exc:
+        if 400 <= exc.status < 500:
+            return Activity("gone", str(exc))
+        return Activity("error", str(exc))
+    except TokenError as exc:
+        return Activity("error", str(exc))
+
+
+_STATE_STYLE = {"open": "green", "idle": "cyan", "relogin": "yellow", "error": "red"}
+
+
+def _stored_leagues(store: TokenStore) -> list[tuple[int, str]]:
+    return [(row.league_id, row.league_name or "?") for row in store.status()]
+
+
+def _leagues() -> None:
+    """Every stored lega, classified: which are active, which are not, and why. Read-only."""
+    from rich.table import Table
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from fantabot.adapters.persistence import database_manager
+    from fantabot.adapters.tokens.store import TokenStore
+    from fantabot.config import settings
+    from fantabot.domain.tokens.crypto import TokenCipher
+
+    excluded = _excluded_leagues(settings.fantabot_leagues_exclude)
+    table = Table("lega", "name", "state", "why", "competition")
+    try:
+        cipher = TokenCipher(settings.fantabot_encryption_key)
+        with database_manager.get_session() as session:
+            store = TokenStore(session, cipher)
+            for league_id, name in _stored_leagues(store):
+                a = _classify(store, league_id)
+                state = f"{a.state} (excluded)" if league_id in excluded else a.state
+                style = _STATE_STYLE.get(a.state, "dim")
+                table.add_row(
+                    str(league_id), name, f"[{style}]{state}[/{style}]", a.reason,
+                    str(a.competition or ""),
+                )
+    except SQLAlchemyError as exc:
+        console.print(f"[red]database unreachable: {type(exc).__name__}[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print(table)
+
+
+def _rules() -> None:
+    """Every open or idle lega's scoring rules that shape the lineup: the defence modifier's
+    range and bonus table, whether the keeper counts, the substitution cap, the captain
+    modifier. Read-only."""
+    from rich.table import Table
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from fantabot.adapters.persistence import database_manager
+    from fantabot.adapters.tokens.store import TokenStore
+    from fantabot.application.lineup_enrich import league_rules
+    from fantabot.config import settings
+    from fantabot.domain.lineup.rules import describe_bands
+    from fantabot.domain.tokens.crypto import TokenCipher
+
+    table = Table("lega", "name", "defence modifier", "bonus by average vote", "subs", "captain")
+    try:
+        cipher = TokenCipher(settings.fantabot_encryption_key)
+        with database_manager.get_session() as session:
+            store = TokenStore(session, cipher)
+            for league_id, name in _stored_leagues(store):
+                if not _classify(store, league_id).active:
+                    continue
+                rules = league_rules(store, league_id, warn=_warn)
+                if rules is None:
+                    table.add_row(str(league_id), name, "[yellow]unreadable[/yellow]", "", "", "")
+                    continue
+                d = rules.defence
+                defence = (
+                    f"{d.lower:.2f}-{d.upper:.2f}, "
+                    f"{'keeper + ' if d.includes_keeper else ''}3 best D, needs 4 D"
+                    if d is not None
+                    else "not played"
+                )
+                bands = ", ".join(describe_bands(d)) if d is not None else ""
+                subs = (
+                    f"max {rules.subs.max_subs} (type {rules.subs.kind})"
+                    if rules.subs is not None
+                    else "?"
+                )
+                captain = (
+                    ", ".join(describe_bands(rules.captain)) if rules.captain is not None else "-"
+                )
+                table.add_row(str(league_id), name, defence, bands, subs, captain)
+    except SQLAlchemyError as exc:
+        console.print(f"[red]database unreachable: {type(exc).__name__}[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print(table)
+
+
+def _submit_all(
+    arm: bool = typer.Option(
+        False, "--arm", help="Second, positive lock. Submit is OFF without it (and AUTO_ACT)."
+    ),
+    no_predict: bool = typer.Option(False, "--no-predict", help=_NO_PREDICT_HELP),
+) -> None:
+    """Field every stored lega with an open matchday — **behind two locks, dry run by default.**
+
+    Each lega is classified first (see `lineup leagues`); only `open` ones not listed in
+    `FANTABOT_LEAGUES_EXCLUDE` are planned and, when armed, submitted. Failure is per lega: one
+    that fails names itself and the rest still run. Exit 1 if any open lega failed.
+
+    Every lega goes through `application/lineup_submit.submit_lineup` as a **scheduled** run —
+    the same path as `lineup submit --scheduled`: unattended, so once a matchday has started
+    the saved lineup stands rather than a resubmit racing matches already under way, and each
+    lega's outcome is appended to the run record.
+    """
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from fantabot.adapters.files.lineup_runs import append_run
+    from fantabot.adapters.persistence import database_manager
+    from fantabot.adapters.tokens.store import TokenStore
+    from fantabot.application.arming import CLI_SENTENCES
+    from fantabot.application.lineup_submit import (
+        NOT_ARMED,
+        chosen_model,
+        failed_run,
+        run_record,
+        submit_lineup,
+    )
+    from fantabot.config import lineup_runs_path, settings
+    from fantabot.domain.lineup.deadline import MATCHDAY_MISMATCH, MATCHDAY_STARTED
+    from fantabot.domain.lineup.errors import LineupError
+    from fantabot.domain.tokens.crypto import TokenCipher
+    from fantabot.domain.tokens.errors import TokenError
+
+    excluded = _excluded_leagues(settings.fantabot_leagues_exclude)
+    failed: list[int] = []
+    dry_run_reason = ""
+    at = _now().astimezone().isoformat(timespec="seconds")
+
+    def record(run: Any) -> None:
+        if not append_run(lineup_runs_path(), run):
+            console.print(f"  [yellow]could not write the run record at {lineup_runs_path()}[/yellow]")
+
+    try:
+        cipher = TokenCipher(settings.fantabot_encryption_key)
+        with database_manager.get_session() as session:
+            store = TokenStore(session, cipher)
+            model = chosen_model()
+            for league_id, name in _stored_leagues(store):
+                a = _classify(store, league_id)
+                head = f"[bold]{league_id} {escape(name)}[/bold] — {a.state}: {escape(a.reason)}"
+                if league_id in excluded:
+                    console.print(f"{head} [dim](excluded, skipped)[/dim]")
+                    continue
+                console.print(head)
+                if a.state == "relogin":
+                    failed.append(league_id)
+                    continue
+                if a.state != "open" or a.competition is None:
+                    continue
+                try:
+                    outcome = submit_lineup(
+                        store,
+                        league_id=league_id,
+                        competition=a.competition,
+                        arm=arm,
+                        now=_now,
+                        scheduled=True,
+                        model=model,
+                        session=session,
+                        predict=not no_predict,
+                    )
+                except (TokenError, LineupError) as exc:
+                    record(failed_run(type(exc).__name__, str(exc), league_id=league_id,
+                                      scheduled=True, at=at, model=model))
+                    console.print(f"  [red]{escape(str(exc))}[/red]")
+                    failed.append(league_id)
+                    continue
+                record(run_record(outcome, league_id=league_id, scheduled=True, at=at))
+                if outcome.plan is not None:
+                    for line in format_plan(outcome.plan, outcome.names):
+                        console.print(f"  {line}")
+                for warning in outcome.warnings:
+                    console.print(f"  [yellow]{escape(warning)}[/yellow]")
+                for module, code in outcome.rejected:
+                    console.print(f"  [yellow]{module} refused ({code})[/yellow]")
+                if outcome.refused == NOT_ARMED:
+                    dry_run_reason = outcome.arming.because(CLI_SENTENCES)
+                    continue
+                if outcome.refused in (MATCHDAY_STARTED, MATCHDAY_MISMATCH):
+                    console.print(f"  [dim]not resubmitting: {escape(outcome.detail)}[/dim]")
+                    continue
+                if outcome.refused:
+                    why = f": {outcome.detail}" if outcome.detail else ""
+                    console.print(f"  [red]refused ({outcome.refused}){escape(why)}[/red]")
+                    failed.append(league_id)
+                    continue
+                assert outcome.submitted is not None
+                if outcome.unconfirmed:
+                    console.print(
+                        f"  [green]submitted {outcome.submitted.module}[/green] [yellow]— "
+                        f"read-back failed, unconfirmed: {escape(outcome.unconfirmed)}[/yellow]"
+                    )
+                    continue
+                saved = outcome.saved
+                console.print(
+                    f"  [green]submitted {outcome.submitted.module} — saved "
+                    f"{len(saved.get('starts', []))} starters, capt {saved.get('capt')}, "
+                    f"switch {saved.get('swtcA')}->{saved.get('swtcB')}, "
+                    f"ldate {saved.get('ldate', '?')}[/green]"
+                )
+    except SQLAlchemyError as exc:
+        console.print(f"[red]database unreachable: {type(exc).__name__}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    if dry_run_reason:
+        console.print(f"[yellow]dry run ({dry_run_reason}) — nothing submitted.[/yellow]")
+    if failed:
+        console.print(f"[red]failed: {', '.join(str(i) for i in failed)}[/red]")
+        raise typer.Exit(code=1)
+
+
 def register(app: typer.Typer) -> None:
     """Attach the lineup commands to the `lineup` group (called from `interface/app`)."""
     app.command("show")(_show)
@@ -1040,3 +1358,6 @@ def register(app: typer.Typer) -> None:
     app.command("refresh")(_refresh)
     app.command("backtest")(_backtest)
     app.command("shadow-report")(_shadow_report)
+    app.command("leagues")(_leagues)
+    app.command("submit-all")(_submit_all)
+    app.command("rules")(_rules)
