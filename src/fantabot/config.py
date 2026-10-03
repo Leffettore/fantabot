@@ -111,6 +111,7 @@ def live_auto_act() -> bool:
 LINEUP_MODEL_VAR = "FANTABOT_LINEUP_MODEL"
 LINEUP_SUB_MODE_VAR = "FANTABOT_LINEUP_SUB_MODE"
 LINEUP_NEWS_VAR = "FANTABOT_LINEUP_NEWS"
+LINEUP_SENTIMENT_VAR = "FANTABOT_LINEUP_SENTIMENT"
 
 
 def live_setting(name: str) -> str | None:
@@ -284,6 +285,9 @@ class Settings(BaseSettings):
     fantabot_lineup_model: str | None = None
     fantabot_lineup_sub_mode: str | None = None
     fantabot_lineup_news: str | None = None
+    # off | shadow | live (domain.lineup.sentiment.SENTIMENT_MODES). Classic leghe only —
+    # a Mantra lega's `lineup_enrich.enrich()` never reaches the code that reads this.
+    fantabot_lineup_sentiment: str | None = None
     # Comma-separated lega ids `lineup submit-all` never touches, even when a matchday is
     # open in them. Every other stored lega is classified and fielded if open.
     fantabot_leagues_exclude: str = ""

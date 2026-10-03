@@ -169,11 +169,20 @@ def format_predictions(
         if p is None:
             return f"  {tag} {name:<18} (no prediction)"
         f = p.factors
-        return (
+        base = (
             f"  {tag} {name:<18} play {p.p_play:4.0%}  fv {p.fv_if_plays:4.2f}"
             f"  score {p.score:5.2f}  [base {f['baseline']:.2f} opp {f['opponent']:.2f}"
             f" venue {f['venue']:.2f} ex {f['ex_team']:.2f} ic {f['index_compare']:.2f}]"
         )
+        # Set only when FANTABOT_LINEUP_SENTIMENT is shadow or live (`lineup_enrich.
+        # load_predictions`) and a reading covered this player — absent otherwise, so a run
+        # with the setting off renders exactly as it did before this feature existed.
+        news_weight = f.get("news_weight", 0.0)
+        if news_weight > 0:
+            base += f"  news_w {news_weight:.2f}"
+        if "shadow_score" in f:
+            base += f"  shadow_score {f['shadow_score']:.2f}"
+        return base
 
     return (
         ["forecast (XI, then bench):"]
@@ -352,6 +361,7 @@ def _plan(
             plans, names, _ = build_plans(
                 store, league_id, competition,
                 session=session, predict=not no_predict, warn=_warn, forecast=predictions,
+                as_of=_now().date(),
             )
     except (TokenError, LineupError) as exc:
         console.print(f"[red]{exc}[/red]")
@@ -1231,6 +1241,12 @@ def _submit_all(
         False, "--arm", help="Second, positive lock. Submit is OFF without it (and AUTO_ACT)."
     ),
     no_predict: bool = typer.Option(False, "--no-predict", help=_NO_PREDICT_HELP),
+    refresh: bool = typer.Option(
+        False,
+        "--refresh",
+        help="After each lega's record is written, bring its history up to date in a "
+        "bounded child.",
+    ),
 ) -> None:
     """Field every stored lega with an open matchday — **behind two locks, dry run by default.**
 
@@ -1242,6 +1258,11 @@ def _submit_all(
     the same path as `lineup submit --scheduled`: unattended, so once a matchday has started
     the saved lineup stands rather than a resubmit racing matches already under way, and each
     lega's outcome is appended to the run record.
+
+    `--refresh` is `lineup submit --refresh`'s, one lega at a time: **off unless passed**, runs
+    **after** that lega's record is written, and is what actually brings `FANTABOT_LINEUP_NEWS`
+    into play — this command is the one the scheduled task runs, and without this flag it never
+    triggered a news (or voti, or lega) refresh at all, whatever `FANTABOT_LINEUP_NEWS` said.
     """
     from sqlalchemy.exc import SQLAlchemyError
 
@@ -1307,6 +1328,12 @@ def _submit_all(
                     failed.append(league_id)
                     continue
                 record(run_record(outcome, league_id=league_id, scheduled=True, at=at))
+                if refresh and outcome.plan is not None:
+                    note = _refresh_child(
+                        league_id, cmday=outcome.plan.cmday, competition=outcome.competition
+                    )
+                    if note:
+                        console.print(f"  [dim]refresh: {escape(note)}[/dim]")
                 if outcome.plan is not None:
                     for line in format_plan(outcome.plan, outcome.names):
                         console.print(f"  {line}")

@@ -41,7 +41,7 @@ from fantabot.application.arming import Arming, decide_arming
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from datetime import datetime
+    from datetime import date, datetime
 
     from sqlalchemy.orm import Session
 
@@ -215,6 +215,7 @@ def build_inputs(
     session: Session | None = None,
     predict: bool = True,
     warn: Warn | None = None,
+    as_of: date | None = None,
 ) -> tuple[LineupInputs, dict[int, str], int]:
     """The reads behind a plan: roster, settings and coordinates, as `LineupInputs`.
 
@@ -231,6 +232,10 @@ def build_inputs(
     scoring rules and, unless `predict` is False, the predictor, which reads its history from
     the database. Without a session the inputs are exactly the plain `indexCompare` ones —
     which is what `lineup_projection` and `lineup_refresh` ask for. Rule problems go to `warn`.
+
+    `as_of` also gates `FANTABOT_LINEUP_SENTIMENT` (`application/lineup_enrich`): `None` is
+    exactly `off`, whatever the setting says — the caller opts in by passing today's date,
+    never by this function reading the clock itself.
     """
     from fantabot.adapters.http import apileague
     from fantabot.application.lineup_enrich import enrich
@@ -256,7 +261,7 @@ def build_inputs(
     if session is not None:
         inputs = enrich(
             inputs, store, league_id, lineup_info, session=session, predict=predict,
-            **({"warn": warn} if warn is not None else {}),
+            as_of=as_of, **({"warn": warn} if warn is not None else {}),
         )
     return inputs, names, comp
 
@@ -270,6 +275,7 @@ def build_plans(
     predict: bool = True,
     warn: Warn | None = None,
     forecast: dict[int, Prediction] | None = None,
+    as_of: date | None = None,
 ) -> tuple[list[PlannedLineup], dict[int, str], int]:
     """`build_inputs`, ranked by the default model: the platform's own `indexCompare`, or —
     for a Classic lega given a `session` — the predictor's blended score, with captain,
@@ -280,7 +286,7 @@ def build_plans(
     from fantabot.application.lineup_planner import plan_lineups
 
     inputs, names, comp = build_inputs(
-        store, league_id, competition, session=session, predict=predict, warn=warn
+        store, league_id, competition, session=session, predict=predict, warn=warn, as_of=as_of
     )
     if forecast is not None and inputs.predictions:
         forecast.update(inputs.predictions)
@@ -339,7 +345,7 @@ def submit_lineup(
     rule_warnings: list[str] = []
     plans, names, comp = build_plans(
         store, league_id, competition,
-        session=session, predict=predict, warn=rule_warnings.append,
+        session=session, predict=predict, warn=rule_warnings.append, as_of=now().date(),
     )
     arming = decide_arming(arm=arm, auto_act=auto_act)
     chose, fallback, shadow = INDEXCOMPARE, "", None

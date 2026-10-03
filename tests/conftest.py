@@ -275,7 +275,7 @@ def synthetic_players(db_session: Session) -> Any:
 def _the_operators_lineup_settings_never_reach_a_test(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The three lineup settings read empty for every test, whatever the operator has set.
+    """The four lineup settings read empty for every test, whatever the operator has set.
 
     `chosen_model()` and its two siblings are read **at the point of use** and fall back to
     the `.env` of the working directory (`config.live_setting`). The parity tier runs from
@@ -289,5 +289,8 @@ def _the_operators_lineup_settings_never_reach_a_test(
     file. Empty is what each of the three parses as "unset and failing closed", which is the
     state every test that does not say otherwise means.
     """
-    for name in ("FANTABOT_LINEUP_MODEL", "FANTABOT_LINEUP_SUB_MODE", "FANTABOT_LINEUP_NEWS"):
+    for name in (
+        "FANTABOT_LINEUP_MODEL", "FANTABOT_LINEUP_SUB_MODE", "FANTABOT_LINEUP_NEWS",
+        "FANTABOT_LINEUP_SENTIMENT",
+    ):
         monkeypatch.setenv(name, "")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 import pytest
@@ -16,6 +17,7 @@ from fantabot.domain.lineup.predict import (
     signals_from_row,
     team_rates,
 )
+from fantabot.domain.shared.values import SentimentRow
 
 # Two real rows from lega 3677376, 2026-09-22 (tkn/img dropped).
 MALEN = {
@@ -132,3 +134,60 @@ def test_team_rates_are_relative_to_the_league_mean() -> None:
 def test_previous_season() -> None:
     assert previous_season("2026/27") == "2025/26"
     assert previous_season("2000/01") == "1999/00"
+
+
+def _reading(player_id: str, *, disponibilita: float, titolarita: float) -> SentimentRow:
+    return SentimentRow(
+        player_id=player_id, nome=f"p{player_id}", data_run="2026-09-20", sentiment=0.0,
+        disponibilita=disponibilita, titolarita=titolarita, mercato=0.0, forma=0.0,
+        rigorista=0.0, piazzati=0.0, confidenza=1.0, ruolo_campo="",
+        ruoli_mantra="", deriva_ruolo=0.0,
+    )
+
+
+class TestSentiment:
+    """`sentiment`/`as_of` are the ablation-by-absence pair: `None` reproduces the exact
+    values `predict` produced before this feature existed."""
+
+    def test_absent_by_default_is_a_no_op(self) -> None:
+        preds = _run([_sig(1, percent=80.0)])
+
+        assert preds[1].factors["news_weight"] == 0.0
+
+    def test_no_as_of_leaves_p_play_untouched_even_with_a_reading(self) -> None:
+        """`as_of` is what turns a reading on; the reading alone must not."""
+        sentiment = {1: _reading("1", disponibilita=0.0, titolarita=0.0)}
+        preds = _run([_sig(1, percent=80.0)], sentiment=sentiment)
+
+        assert preds[1].p_play == pytest.approx(0.8)
+        assert preds[1].factors["news_weight"] == 0.0
+
+    def test_a_fresh_injury_reading_zeroes_p_play_and_the_score(self) -> None:
+        sentiment = {1: _reading("1", disponibilita=0.0, titolarita=0.0)}
+        preds = _run(
+            [_sig(1, percent=80.0)], sentiment=sentiment, as_of=date(2026, 9, 20)
+        )
+
+        assert preds[1].p_play == pytest.approx(0.0)
+        assert preds[1].expected == pytest.approx(0.0)
+        assert preds[1].score == pytest.approx(0.0)
+        assert preds[1].factors["news_weight"] == pytest.approx(1.0)
+
+    def test_a_reading_for_another_player_leaves_this_one_untouched(self) -> None:
+        sentiment = {2: _reading("2", disponibilita=0.0, titolarita=0.0)}
+        preds = _run(
+            [_sig(1, percent=80.0)], sentiment=sentiment, as_of=date(2026, 9, 20)
+        )
+
+        assert preds[1].p_play == pytest.approx(0.8)
+        assert preds[1].factors["news_weight"] == 0.0
+
+    def test_vote_if_plays_is_untouched(self) -> None:
+        """Scope is availability only — quality-if-he-plays is out of bounds."""
+        sentiment = {1: _reading("1", disponibilita=0.0, titolarita=0.0)}
+        with_news = _run(
+            [_sig(1, percent=80.0)], sentiment=sentiment, as_of=date(2026, 9, 20)
+        )
+        without_news = _run([_sig(1, percent=80.0)])
+
+        assert with_news[1].vote_if_plays == pytest.approx(without_news[1].vote_if_plays)

@@ -1220,3 +1220,78 @@ def test_submit_all_reports_a_relogin_and_exits_one(monkeypatch: pytest.MonkeyPa
     assert result.exit_code == 1
     assert [lid for lid, _ in posted] == [2], "one lega's token must not stop the others"
     assert "failed: 1" in result.output
+
+
+class TestSubmitAllRefresh:
+    """`submit-all --refresh` — the flag `scripts/matchday.ps1` needs to make
+    `FANTABOT_LINEUP_NEWS` (and voti/lega) actually run, one child per attempted lega."""
+
+    def test_without_the_flag_no_child_is_started(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _submit_all_fakes(monkeypatch, auto_act=True, states={1: "open"})
+        spawned: list[Any] = []
+        monkeypatch.setattr(
+            "fantabot.adapters.process.run_grouped",
+            lambda *a, **k: spawned.append((a, k)) or (0, ""),
+        )
+        monkeypatch.setattr("fantabot.domain.lineup.refresh.due", lambda *_a, **_k: ("voti",))
+
+        result = runner.invoke(app, ["lineup", "submit-all", "--arm"])
+
+        assert result.exit_code == 0, result.output
+        assert spawned == []
+
+    def test_with_the_flag_one_child_runs_per_attempted_lega(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import sys
+
+        _submit_all_fakes(monkeypatch, auto_act=True, states={1: "open", 2: "open"})
+        spawned: list[Any] = []
+        monkeypatch.setattr(
+            "fantabot.adapters.process.run_grouped",
+            lambda command, **k: spawned.append(list(command)) or (0, ""),
+        )
+        monkeypatch.setattr("fantabot.domain.lineup.refresh.due", lambda *_a, **_k: ("voti",))
+
+        result = runner.invoke(app, ["lineup", "submit-all", "--arm", "--refresh"])
+
+        assert result.exit_code == 0, result.output
+        assert len(spawned) == 2
+        for command in spawned:
+            assert command[:6] == [
+                sys.executable, "-m", "fantabot", "lineup", "refresh", "--league",
+            ]
+
+    def test_the_child_runs_after_that_lega_s_record_and_cannot_change_it(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _submit_all_fakes(monkeypatch, auto_act=True, states={1: "open"})
+        order: list[str] = []
+        monkeypatch.setattr(
+            "fantabot.adapters.files.lineup_runs.append_run",
+            lambda _path, _run: order.append("record") or True,
+        )
+        monkeypatch.setattr(
+            "fantabot.adapters.process.run_grouped",
+            lambda *a, **k: order.append("child") or (None, "killed after 1800s"),
+        )
+        monkeypatch.setattr("fantabot.domain.lineup.refresh.due", lambda *_a, **_k: ("lega",))
+
+        result = runner.invoke(app, ["lineup", "submit-all", "--arm", "--refresh"])
+
+        assert order == ["record", "child"], order
+        assert result.exit_code == 0, "a killed refresh changed the submit's exit code"
+
+    def test_with_nothing_due_no_child_is_started(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _submit_all_fakes(monkeypatch, auto_act=True, states={1: "open"})
+        spawned: list[Any] = []
+        monkeypatch.setattr(
+            "fantabot.adapters.process.run_grouped",
+            lambda *a, **k: spawned.append((a, k)) or (0, ""),
+        )
+        monkeypatch.setattr("fantabot.domain.lineup.refresh.due", lambda *_a, **_k: ())
+
+        result = runner.invoke(app, ["lineup", "submit-all", "--arm", "--refresh"])
+
+        assert result.exit_code == 0
+        assert spawned == []

@@ -199,6 +199,20 @@ src/fantabot/
   buries the one thing the operator has to do. **Reads and writes are separate phases**,
   because holding a write transaction open across a multi-megabyte GET leaves a Postgres
   connection idle-in-transaction for the length of a network call.
+* **`domain/lineup/sentiment.py`** — the weekly Classic lineup's own use of scraped news,
+  gated by `FANTABOT_LINEUP_SENTIMENT` (`off`/`shadow`/`live`, read in
+  `application/lineup_enrich.py::load_predictions`). It reuses `domain/lineup/presence.py`'s
+  own formula (`cal()`, `aged_confidence`) rather than restating it, applied to
+  `predict.py`'s `p_play` in the role `presence()` gives `p_hist` — a reading nudges the
+  platform's own probable-starter percentage rather than replacing it. Deliberately **not**
+  ported: the asta's *tilt* (`sentiment`/`forma`/`mercato`/`rigorista`/`piazzati` — "how well
+  will he do"), because `fv_if_plays` already has a partially measured model to protect and
+  there is no historical corpus of `player_sentiment` to check a quality tilt against, unlike
+  votes or prices. `off` costs zero extra queries (`SentimentRepository.latest_sentiment` is
+  never called, not just its result discarded); `shadow` ranks exactly as `off` did but
+  attaches `news_weight`/`shadow_score` to each `Prediction.factors` and warns with the
+  biggest movers; only `live` lets it change the submitted XI. Classic only — `enrich()`'s
+  existing Mantra early return is what keeps the operator's real lega untouched.
 
 ## Known unknowns — resolve before flipping `FANTABOT_AUTO_ACT=true`
 
@@ -277,6 +291,16 @@ src/fantabot/
   session (`lineup_projection`, `lineup_refresh`) the inputs are the plain `indexCompare`
   ones. `submit-all` runs each open lega through `submit_lineup` as a **scheduled** run, so
   it inherits the kickoff cutoff, the positional guard, the read-back and the run record.
+  **`FANTABOT_LINEUP_SENTIMENT` landed in `shadow` mode, not yet `live`.** Evidence pending
+  over live Classic matchdays — see `domain/lineup/sentiment.py` above. It also closed a
+  standing gap: `submit-all`, the command `scripts/matchday.ps1` actually runs, had **no
+  `--refresh` flag at all** until now, so `FANTABOT_LINEUP_NEWS` never triggered a query
+  regardless of setting — `matchday.ps1` now passes `--refresh`. ⚠ **One risk this did not
+  fix, only documented**: the refresh "due" marker (`domain/lineup/refresh.py` /
+  `adapters/files/refresh_marker.py`) is keyed only by `(source, cmday)`, not by `league_id`.
+  Two leagues open on the same Serie A `cmday` at once would have the second's refresh read
+  as "already done" from the first's success. Dormant today because exactly one lega is
+  `open`; a fix widens the marker's key, not built yet.
 - ~~**The lega itself was not in the database**~~ **Resolved 2026-09-02** by
   `fantabot lega sync`. Three things it settled, each of which had been recorded here
   or in `docs/leghe-api.md` as unknown:
@@ -412,6 +436,9 @@ src/fantabot/
   `fantabot news fetch` (see `docs/spec-news-sentiment.md`), which is a different
   thing: it is opinion and availability, not per-matchday projected scores. When one
   is picked, write the interface against the consumer that exists then.
+  The availability half **is** now wired into the Classic lineup — see
+  `domain/lineup/sentiment.py` under "Where the decisions live" — so this bullet is about
+  projected scores specifically, not "nothing downstream reads the news feed at all".
 - ~~**Bearer token**~~ **Resolved.** Encrypted in Postgres (`league_tokens`),
   written by `fantabot auth login`, read through `apileague.auth_headers`. Spec:
   the archived token-store spec — recovered from commit

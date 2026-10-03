@@ -23,18 +23,27 @@
 * **`indexCompare`** is the platform's composite forecast (0 when injured, ~17 for a top
   forward) on its own scale. It is blended in, rescaled per rosa so both terms share a mean,
   rather than thrown away: it knows things this model does not.
+* **`sentiment`**, when given, nudges `p_play` toward a scraped reading before anything else
+  is computed from it — `domain.lineup.sentiment.adjusted_p_play`, `presence.py`'s own
+  formula. Absent (`None`, the default) it is a no-op: `p_play` is exactly the platform's
+  percentage, as it always was. See that module for why only availability is touched and not
+  a quality tilt.
 
 Every weight is a declared prior in `PredictWeights`, like `asta.sentiment.SentimentWeights`,
-not a fitted one. No clock and no I/O: the caller hands in the rows and the history.
+not a fitted one. No clock and no I/O: the caller hands in the rows and the history; `as_of`
+is a parameter alongside them, never read from the clock here.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any
 
 from fantabot.domain.classic.roles import role_from_fcrle
+from fantabot.domain.lineup.sentiment import adjusted_p_play
+from fantabot.domain.shared.values import SentimentRow
 
 #: Per-role fantamedia prior for a player with no history at all.
 DEFAULT_ROLE_PRIOR: Mapping[str, float] = {"P": 5.0, "D": 5.9, "C": 6.2, "A": 6.6}
@@ -187,6 +196,8 @@ def predict(
     prior_vote: Mapping[int, float] | None = None,
     past_clubs: Mapping[int, frozenset[str]],
     rates: Mapping[str, TeamRates],
+    sentiment: Mapping[int, SentimentRow] | None = None,
+    as_of: date | None = None,
     weights: PredictWeights | None = None,
 ) -> dict[int, Prediction]:
     """A `Prediction` per row. Every missing signal is a neutral factor, never an error — this
@@ -217,11 +228,19 @@ def predict(
         p_play = w.default_percent if r.percent is None else r.percent / 100.0
         if r.status is not None and r.status != 1:
             p_play *= w.status_doubt
+        news_weight = 0.0
+        if sentiment is not None and as_of is not None and r.pid in sentiment:
+            p_play, news_weight = adjusted_p_play(
+                p_play, sentiment[r.pid], pid=r.pid, role=r.role, as_of=as_of
+            )
         fv = baseline * opp * venue * ex
         draft[r.pid] = (
             p_play,
             fv,
-            {"baseline": baseline, "opponent": opp, "venue": venue, "ex_team": ex},
+            {
+                "baseline": baseline, "opponent": opp, "venue": venue, "ex_team": ex,
+                "news_weight": news_weight,
+            },
         )
 
     # Rescale indexCompare onto the model's scale over this rosa, so the blend is not
