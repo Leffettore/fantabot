@@ -410,7 +410,7 @@ def resolve_team_names_or_report() -> int:
     except TeamMappingError as exc:
         print(
             f"teams: names not resolved ({exc}) — run "
-            "`fantabot db backfill-teams` once that season's fixtures are scraped"
+            "the team backfill once that season's fixtures are scraped"
         )
         return 0
     if changed:

@@ -9,7 +9,7 @@ They used to sit in the repository's `data/` directory and were reached two diff
 ways: `legality.py` climbed four levels out of its own module path, and `mantra-grid
 --write` wrote to `settings.fantabot_data_dir`, which defaults to `./data` and is
 therefore relative to wherever the process was started. Those two agree only when the
-CWD is the repository root -- so `fantabot asta legality` from anywhere else read a
+CWD is the repository root -- so any command run from elsewhere read a
 matrix the writer would not have written, and a `pip install` that was not editable had
 no `data/` at all.
 

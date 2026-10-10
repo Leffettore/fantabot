@@ -255,7 +255,7 @@ def test_every_league_table_has_a_producer() -> None:
 
     It asserted absence for three revisions running — first that no importer wrote these
     tables, then that "open question 5" was still open, then that the module docstring
-    still said "Non-goals". `fantabot lega sync` closed the question on 2026-09-02, so
+    still said "Non-goals". the lega sync closed the question on 2026-09-02, so
     the test now names the writer for each table instead. A table added here without one
     fails, which is the same guard pointed the other way.
     """

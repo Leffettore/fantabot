@@ -1,0 +1,7 @@
+[Unit]
+Description=fantabot weekly lineup submission
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/fantabot
+ExecStart=%h/fantabot/scripts/matchday.sh

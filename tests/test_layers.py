@@ -30,7 +30,6 @@ LAYERS: dict[str, str] = {
     # -- domain: decisions. Pure by intent; the rules below are what make that true.
     "fantabot.domain.asta": "domain",
     "fantabot.domain.classic": "domain",
-    "fantabot.domain.harvest": "domain",
     "fantabot.domain.news": "domain",
     "fantabot.domain.mantra": "domain",
     "fantabot.domain.shared.club_names": "domain",
@@ -42,27 +41,18 @@ LAYERS: dict[str, str] = {
     "fantabot.domain.tokens.claims": "domain",
     "fantabot.domain.tokens.errors": "domain",
     "fantabot.domain.tokens.capture": "domain",
-    "fantabot.domain.tokens.fantalab": "domain",
     # Fernet encrypt/decrypt over a key passed in as an argument. `tokens/__init__.py`
     # lists it among the three pure modules; only `store` and `fantalab_store` do I/O.
     "fantabot.domain.tokens.crypto": "domain",
     "fantabot.domain.tokens.status": "domain",
     "fantabot.domain": "domain",
     # -- application: orchestration. May use adapters; may not be a user interface.
-    "fantabot.application.asta_planner": "application",
-    "fantabot.application.harvest_backfill": "application",
-    "fantabot.application.harvest_loader": "application",
-    "fantabot.application.harvest_supervisor": "application",
     "fantabot.application.news_fetcher": "application",
-    "fantabot.application.mantra_collector": "application",
-    "fantabot.application.pricing": "application",
     "fantabot.application.auth_login": "application",
-    "fantabot.application.fantalab_login": "application",
     "fantabot.application": "application",
     # -- adapters: everything that talks to the world.
     "fantabot.adapters.persistence": "adapters",
     "fantabot.adapters.agent": "adapters",
-    "fantabot.adapters.http.fantalab": "adapters",
     "fantabot.adapters.scraping": "adapters",
     "fantabot.adapters.http.apileague": "adapters",
     "fantabot.adapters.browser.capture": "adapters",
@@ -73,21 +63,14 @@ LAYERS: dict[str, str] = {
     # would have made `.env` a dependency of every pure test that touched it.
     "fantabot.adapters.browser.storage_state": "adapters",
     "fantabot.domain.tokens": "domain",
-    "fantabot.adapters.http.harvest.stream": "adapters",
-    "fantabot.adapters.http.harvest.transport": "adapters",
-    "fantabot.adapters.files.landing": "adapters",
     # The cooperative stop flag. An adapter for the same reason `lock.py` is one: the
     # decision to stop is the caller's, and this only writes it down where another
     # process can see it.
-    "fantabot.adapters.files.stopflag": "adapters",
     # "The only module here that touches disk", says its own docstring. It was filed
     # under application until the W6 destination map contradicted it.
-    "fantabot.adapters.files.mantra_writer": "adapters",
-    "fantabot.adapters.http.harvest.client": "adapters",
     # `store.py` holds only `build_row`, which is pure — it reached the database
     # solely by importing `PoolPlayer` from a module that did.
     "fantabot.adapters.persistence.news_pool": "adapters",
-    "fantabot.adapters.persistence.news_sentiment": "adapters",
     "fantabot.adapters": "adapters",
     # -- interface: the CLI, and only the CLI.
     # `python -m fantabot`, which is how the app's supervisor spawns the CLI: its own
@@ -96,8 +79,6 @@ LAYERS: dict[str, str] = {
     "fantabot.__main__": "interface",
     "fantabot.interface.app": "interface",
     "fantabot.interface": "interface",
-    "fantabot.interface.asta": "interface",
-    "fantabot.interface.harvest": "interface",
 }
 
 #: Packages that carry no code and belong to no layer. The four layer roots are here
@@ -105,10 +86,9 @@ LAYERS: dict[str, str] = {
 #: a directory would be a rule about nothing.
 UNPLACED = {"fantabot.domain", "fantabot.application", "fantabot.adapters",
             "fantabot.interface",
-            "fantabot", "fantabot.domain.asta", "fantabot.domain.harvest", "fantabot.domain.news",
+            "fantabot", "fantabot.domain.asta", "fantabot.domain.news",
             "fantabot.domain.tokens", "fantabot.adapters.tokens", "fantabot.adapters.persistence", "fantabot.adapters.persistence.models",
-            "fantabot.adapters.persistence.repositories", "fantabot.adapters.agent", "fantabot.adapters.http.fantalab",
-            "fantabot.adapters.scraping", "fantabot.domain.mantra", "fantabot.data_sources"}
+            "fantabot.adapters.persistence.repositories", "fantabot.adapters.agent",             "fantabot.adapters.scraping", "fantabot.domain.mantra", "fantabot.data_sources"}
 
 
 def layer_of(module: str) -> str:
@@ -153,7 +133,6 @@ FORBIDDEN_TO_APPLICATION = ("typer", "rich", "fantabot.interface", "playwright")
 #: rule against the whole adapter would forbid `lineup show` from showing anything.
 WRITING_NAMES: dict[str, str] = {
     "teamLineup_submit": "fantabot.adapters.http.apileague",
-    "place_raise": "fantabot.adapters.http.fantalab.rtdb",
 }
 
 
@@ -306,17 +285,17 @@ class TestTheWritingRuleItself:
 
     def test_a_new_writing_call_from_the_command_layer_is_a_violation(self) -> None:
         fake = self._fake(
-            {"fantabot.interface.newcmd": {"place_raise"}},
+            {"fantabot.interface.newcmd": {"teamLineup_submit"}},
             {"fantabot.interface.newcmd": "interface"},
         )
         assert writing_violations(["fantabot.interface.newcmd"], **fake) == {  # type: ignore[arg-type]
-            ("fantabot.interface.newcmd", "place_raise")
+            ("fantabot.interface.newcmd", "teamLineup_submit")
         }
 
     def test_the_same_call_from_application_is_not(self) -> None:
         """That is the destination, not a leak: 3.3 and 3.9b move these calls there."""
         fake = self._fake(
-            {"fantabot.application.asta_session": {"place_raise"}},
+            {"fantabot.application.asta_session": {"teamLineup_submit"}},
             {"fantabot.application.asta_session": "application"},
         )
         assert writing_violations(["fantabot.application.asta_session"], **fake) == set()  # type: ignore[arg-type]
@@ -324,13 +303,13 @@ class TestTheWritingRuleItself:
     def test_the_edge_is_required_as_well_as_the_name(self) -> None:
         """Both conditions, and this is what makes the *second* one load-bearing.
 
-        A module that merely says `place_raise` — in a variable, a keyword argument, an
+        A module that merely says `teamLineup_submit` — in a variable, a keyword argument, an
         unrelated helper — and cannot reach the adapter is not acting. Deleting
         `and reaches(...)` from the rule used to leave all eleven tests in this file green.
         """
         module = "fantabot.interface.printer"
         never_reaches = {
-            "names_used": lambda _m: frozenset({"place_raise"}),
+            "names_used": lambda _m: frozenset({"teamLineup_submit"}),
             "reaches": lambda _m, _t: False,
             "layer": lambda _m: "interface",
         }

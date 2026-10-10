@@ -91,7 +91,7 @@ class RosterIncomplete(LineupError):
     def __init__(self, player_id: int) -> None:
         super().__init__(
             f"roster player {player_id} has no Mantra role in quotazioni — cannot place "
-            "him. Refresh the scrape (`fantabot db scrape quotazioni`) or check the id; "
+            "him. Refresh the quotazioni scrape or check the id; "
             "nothing was assembled."
         )
         self.player_id = player_id

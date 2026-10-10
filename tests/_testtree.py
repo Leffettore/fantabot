@@ -26,30 +26,8 @@ from __future__ import annotations
 #: file -> directory under `tests/`. The subject's layer, then its feature.
 TREE: dict[str, str] = {
     # -- domain/asta: the decision logic ------------------------------------------------
-    "test_asta_bargain.py": "domain/asta",
-    "test_asta_bid.py": "domain/asta",
-    "test_asta_drain.py": "domain/asta",
-    "test_asta_edge.py": "domain/asta",
     "test_asta_legality.py": "domain/asta",
-    "test_asta_live.py": "domain/asta",
-    "test_asta_opponents.py": "domain/asta",
-    "test_asta_optimizer.py": "domain/asta",
-    "test_asta_prices.py": "domain/asta",
-    "test_asta_report.py": "domain/asta",
-    "test_asta_reservation.py": "domain/asta",
-    "test_asta_resize_band.py": "domain/asta",
     "test_asta_sentiment.py": "domain/asta",
-    "test_asta_stateentry.py": "domain/asta",
-    "test_asta_rules_for_room.py": "domain/asta",
-    "test_asta_rules_for_lega.py": "domain/asta",
-    "test_asta_room_url.py": "domain/asta",
-    "test_asta_seconds_left.py": "domain/asta",
-    "test_asta_listone_rows.py": "domain/asta",
-    "test_asta_copilot.py": "domain/asta",
-    "test_asta_max_cap.py": "domain/asta",
-    "test_asta_unvaluable.py": "domain/asta",
-    "test_asta_value.py": "domain/asta",
-    "test_asta_macro_roles.py": "domain/asta",
     "test_roster.py": "domain/lineup",
     # -- domain/lega: the platform's own JSON, translated
     "test_lega_parse.py": "domain/lega",
@@ -92,25 +70,14 @@ TREE: dict[str, str] = {
     # The rule is about the whole asta feature including its command, but what it
     # protects -- one calendar seam for the golden harness -- is a property of the
     # decision layer, which is the half that must be deterministic.
-    "test_asta_clock.py": "domain/asta",
     # `ruolo_campo` must never reach a decision module. That is a domain rule about
     # domain modules, checked over the domain package.
-    "test_asta_sentiment_wiring.py": "domain/asta",
-    "test_asta_cycle_cost.py": "domain/asta",
     # -- domain/harvest ------------------------------------------------------------------
-    "test_aste_backfill.py": "domain/harvest",
-    "test_aste_incremental.py": "domain/harvest",
     "test_aste_models.py": "domain/harvest",
-    "test_aste_reconstruct.py": "domain/harvest",
-    "test_aste_reducer.py": "domain/harvest",
-    "test_aste_registry.py": "domain/harvest",
-    "test_aste_sse.py": "domain/harvest",
     "test_aste_fixtures.py": "domain/harvest",
     # `compare.py` is the domain module; the `scripts/` file of nearly the same name was
     # deleted in W2, and the two were conflated once already.
-    "test_compare_collectors.py": "domain/harvest",
     # Review fixes across the reducer and reconstruct; the subject is the fold.
-    "test_aste_review_fixes.py": "domain/harvest",
     # -- domain/news ----------------------------------------------------------------------
     "test_news_mantra.py": "domain/news",
     "test_news_models.py": "domain/news",
@@ -123,13 +90,9 @@ TREE: dict[str, str] = {
     # -- domain/classic: the Classic (P/D/C/A) engine -------------------------------------
     "test_classic_roles.py": "domain/classic",
     "test_classic_formations.py": "domain/classic",
-    "test_classic_optimizer.py": "domain/classic",
-    "test_classic_room.py": "domain/classic",
     "test_classic_lineup.py": "domain/classic",
     "test_classic_lineup_planner.py": "domain/classic",
-    "test_asta_room_classic.py": "application",
     # -- domain/mantra, domain/shared, domain/tokens --------------------------------------
-    "test_mantra_grid_gates.py": "domain/mantra",
     "test_club_names.py": "domain/shared",
     "test_league.py": "domain/shared",
     "test_parsing.py": "domain/shared",
@@ -138,71 +101,43 @@ TREE: dict[str, str] = {
     "test_token_claims.py": "domain/tokens",
     "test_token_crypto.py": "domain/tokens",
     "test_token_status.py": "domain/tokens",
-    "test_fantalab_session.py": "domain/tokens",
     # -- application ----------------------------------------------------------------------
-    "test_asta_bench.py": "application",
     "test_lineup_planner.py": "application",
     # The capture loop that replaced "press Enter once you are logged in".
     "test_login_wait.py": "application",
     "test_lega_sync.py": "application",
-    "test_asta_calibrate.py": "application",
     # T19: which listone a room is priced against, and who said so. Pure — the rungs are
     # decided here and fetched in `interface/asta.py`.
-    "test_asta_format.py": "application",
-    "test_plan_inputs.py": "application",
-    "test_plan_request.py": "application",
-    "test_corpus_shape.py": "application",
     # The credit walk-away. Filed by its subject: it is the number a bid is made against,
     # and `application/` is where the pair that computes it is assembled.
-    "test_walk_aways.py": "application",
-    "test_asta_room_resolve.py": "application",
-    "test_asta_room_memo.py": "application",
-    "test_asta_room_stall.py": "application",
     "test_arming.py": "application",
     # T28: `safe_dsn` and the secret sets — the two decisions `config-check` and the
     # app's System page must not each keep a copy of.
-    "test_config_report.py": "application",
     # T24: what a valid exclusion is, and what a row with no name means — the two
     # decisions `db exclude`/`db exclusions` and the Asta page share.
-    "test_player_exclusions.py": "application",
     # T25: the two one-shot team commands — which endpoint `snapshot-team` reads, and
     # what an untrustworthy club-name mapping means to the command that is its remedy.
-    "test_team_maintenance.py": "application",
     # T23: what `db scrape` may be asked for — the three tables, what a season is, and
     # the `DEFAULT_SEASONS` staleness report (the two short lists are fixed; the report
     # is kept for the next August and driven by shortening a scraper's own list).
-    "test_scrape_inputs.py": "application",
     # T26: where a dump lands, and the refusal that keeps it off this volume. Separate
     # from `test_cli_db_dump.py`, which is about the CLI's printing of it.
-    "test_db_dump.py": "application",
     "test_lineup_submit.py": "application",
     "test_lineup_shadow_wiring.py": "application",
     "test_lineup_shadow.py": "application",
     "test_lineup_projection.py": "application",
     "test_lineup_golden.py": "application",
-    "test_asta_room_tracker.py": "application",
     # T18-lift part 1: the composition of a live room — the twenty keywords `asta room`
     # and the app's room route must not each assemble, and the one poll both drive it
     # through. Separate from `test_asta_room_tracker.py`, which is about what one cycle
     # decides rather than about who wired the decider.
-    "test_asta_advisory.py": "application",
-    "test_asta_session.py": "application",
-    "test_asta_copilot_worker.py": "application",
     # T22: what a backfill may be asked to load — the refusals, and the enumeration
     # of the harvest home that the picker and `harvest backfill` must not each invent.
-    "test_backfill_inputs.py": "application",
-    "test_aste_loader.py": "application",
-    "test_aste_load_catchup.py": "application",
-    "test_aste_load_windowing.py": "application",
-    "test_aste_supervisor.py": "application",
-    "test_aste_outage.py": "application",
     "test_lineup_backtest.py": "application",
     "test_lineup_refresh.py": "application",
     "test_news_roster.py": "application",
     "test_news_pipeline.py": "application",
     "test_news_pipeline_limits.py": "application",
-    "test_asta_planner.py": "application",
-    "test_pricing.py": "application",
     # -- adapters -------------------------------------------------------------------------
     "test_agentkit_env.py": "adapters/agent",
     "test_agentkit_options.py": "adapters/agent",
@@ -211,35 +146,18 @@ TREE: dict[str, str] = {
     "test_voti_range.py": "adapters/scraping",
     "test_apileague_client.py": "adapters/http",
     "test_apileague_teamlineup.py": "adapters/http",
-    "test_fantalab_feed.py": "adapters/http",
-    "test_fantalab_rest.py": "adapters/http",
-    "test_fantalab_listone.py": "adapters/http",
-    "test_fantalab_room.py": "adapters/http",
-    "test_fantalab_room_visibility.py": "adapters/http",
-    "test_fantalab_lot_router.py": "adapters/http",
-    "test_fantalab_rtdb.py": "adapters/http",
-    "test_fantalab_write.py": "adapters/http",
-    "test_aste_client.py": "adapters/http",
-    "test_aste_stream.py": "adapters/http",
     "test_aste_no_sockets.py": "adapters/http",
     # The claim is about the modules that collect, which now span three layers; it is
     # filed with the transport that would carry a filtered query.
-    "test_aste_both_formats.py": "adapters/http",
-    "test_aste_landing.py": "adapters/files",
     "test_lineup_runs.py": "adapters/files",
-    "test_stop_flag.py": "adapters/files",
     # The process-group runner. Filed under `files` with the other small adapters that
     # touch the machine rather than the network.
     "test_process_group.py": "adapters/files",
-    "test_role_lock.py": "adapters/files",
     # The reader, beside the writer. Filed by its subject rather than its imports: it
     # reads `application/asta_room.py` to check the writer and the reader still agree.
-    "test_room_journal_read.py": "adapters/files",
     "test_db_boundary.py": "adapters/persistence",
     "test_db_models.py": "adapters/persistence",
-    "test_repositories_fake.py": "adapters/persistence",
     "test_upserts.py": "adapters/persistence",
-    "test_clearing_sales_shapes.py": "adapters/persistence",
     # Filed with the read it measures, not with the pure rule beside it: what it pins
     # is what is in the database, which is the repository's subject.
     "test_backtest_corpus_db.py": "adapters/persistence",
@@ -259,51 +177,26 @@ TREE: dict[str, str] = {
     "test_config_harvest_dir.py": "adapters",
     "test_config_journal_path.py": "adapters",
     # -- interface --------------------------------------------------------------------------
-    "test_cli_aste_backfill.py": "interface",
-    "test_cli_aste_collect.py": "interface",
     # Three database failures, told apart at the command that has to retry one of them.
-    "test_cli_aste_load_errors.py": "interface",
     # About `config.harvest_dir`, but what it pins is the four *commands* that default to it.
-    "test_cli_harvest_home.py": "interface",
     "test_cli_command_set.py": "interface",
     "test_cli_forget_divergence.py": "interface",
-    "test_cli_config_check.py": "interface",
-    "test_cli_db_check.py": "interface",
-    "test_cli_db_dump.py": "interface",
-    "test_cli_exclusions.py": "interface",
-    "test_cli_db_price.py": "interface",
     # T23: the lift's proof — the command fetches nothing it was not asked for, and says
     # which seasons it took before it takes minutes taking them.
-    "test_cli_db_scrape.py": "interface",
     "test_cli_entrypoints.py": "interface",
     "test_lineup_cli.py": "interface",
-    "test_cli_fantalab_login.py": "interface",
     "test_cli_login.py": "interface",
-    "test_cli_news_fetch.py": "interface",
     "test_cli_token_forget.py": "interface",
     "test_cli_token_status.py": "interface",
-    "test_asta_bench_cli.py": "interface",
-    "test_asta_id_bridge.py": "interface",
-    "test_asta_callable_pool.py": "interface",
-    "test_asta_arming.py": "interface",
-    "test_asta_bid_session.py": "interface",
-    "test_asta_cycle_ms.py": "interface",
-    "test_asta_live_request.py": "interface",
-    "test_asta_live_stop.py": "interface",
-    "test_asta_lega_band.py": "interface",
-    "test_room_view.py": "interface",
-    "test_options.py": "interface",
     # -- about the repository itself, not about one layer -------------------------------------
     "test_layers.py": ".",
     "test_importgraph.py": ".",
-    "test_destinations.py": ".",
-    "test_golden.py": ".",
     "test_integration_isolation.py": ".",
     "test_suite_scope.py": ".",
     "test_scripts_resolve.py": ".",
     "test_testtree.py": ".",
     "test_docs.py": ".",
     "test_links.py": ".",
-    "test_gate.py": ".",
-    "test_workflows.py": ".",
+    "test_lineup_enrich.py": "application",
+    "test_sentiment.py": "domain/lineup",
 }

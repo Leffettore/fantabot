@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import sys
 import textwrap
-from pathlib import Path
 
 import _importgraph as G
 import pytest
@@ -208,29 +207,8 @@ class TestAgainstTheRealTree:
     def test_it_finds_every_module(self) -> None:
         found = set(G.modules())
         assert "fantabot.interface.app" in found
-        assert "fantabot.domain.asta.optimizer" in found
-        assert len(found) > 90
-
-    def test_the_two_known_leaks_are_seen(self) -> None:
-        """Both are function-body imports, and both are P11's reason for existing.
-
-        If these ever come back False *without* the corresponding split having landed,
-        the walker has stopped seeing function-level imports — which is the failure
-        mode that would quietly disarm every rule in `test_layers.py`.
-        """
-        leaks = {
-            m
-            for m in ("fantabot.domain.asta.prices", "fantabot.domain.news.pool")
-            if G.reaches(m, "fantabot.adapters.persistence")
-        }
-        split = {
-            m
-            for m in ("fantabot.domain.asta.prices", "fantabot.domain.news.pool")
-            if "import" not in Path(
-                G.SRC.joinpath(*m.split("."))
-            ).with_suffix(".py").read_text().split("def ")[-1]
-        }
-        assert leaks or split, "neither module leaks and neither was split — check the walker"
+        assert "fantabot.application.lineup_submit" in found
+        assert len(found) > 60
 
     def test_it_does_not_import_what_it_reads(self) -> None:
         """The point of the AST walk. Importing would run `Settings()` and open sockets.

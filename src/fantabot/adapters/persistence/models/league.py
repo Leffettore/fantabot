@@ -6,9 +6,7 @@ all at 500/500 credits, asta not yet held — and the reason to keep taking them
 is the question that snapshot cannot answer on its own: *what did the market
 look like before that bid.*
 
-**Every table here has a producer as of 2026-09-02.** `fantabot db snapshot-team` still
-writes a single `LeagueTeamSnapshot` for our own team (`apileague.my_team`); `fantabot
-lega sync` writes all of them — `LeagueSnapshot`, one `LeagueTeamSnapshot` per team with
+**Every table here has a producer as of 2026-09-02.** `lega_sync` writes all of them — `LeagueSnapshot`, one `LeagueTeamSnapshot` per team with
 the rosa and the costs, `LeaguePlayerPool`, `LeagueCompetition`, `LeagueCustomRole` and
 the upserted `LeagueFixture`. The whole-lega read was on SPEC's Non-goals list until then:
 what took it off is that `GET /onboarding/v1/league/teams` turned out to carry every

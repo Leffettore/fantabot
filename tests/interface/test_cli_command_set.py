@@ -24,33 +24,9 @@ from fantabot.interface.app import app
 #: Every command reachable from the root, as the user types it. Sub-app commands
 #: appear space-separated (`asta optimize`) once the groups land.
 EXPECTED: set[str] = {
-    "asta bench",
-    "asta bid",
-    "asta calibrate",
-    "asta room",
-    "asta legality",
-    "asta live",
-    "asta optimize",
-    "auth fantalab-login",
     "auth forget",
     "auth login",
     "auth status",
-    "config-check",
-    "db backfill-teams",
-    "db check",
-    "db exclude",
-    "db exclusions",
-    "db unexclude",
-    "db dump",
-    "db price",
-    "db scrape",
-    "db snapshot-team",
-    "harvest backfill",
-    "harvest collect",
-    "harvest load",
-    "harvest scan",
-    "lega show",
-    "lega sync",
     "lineup backtest",
     "lineup leagues",
     "lineup plan",
@@ -60,8 +36,6 @@ EXPECTED: set[str] = {
     "lineup show",
     "lineup submit",
     "lineup submit-all",
-    "mantra-grid",
-    "news fetch",
 }
 
 

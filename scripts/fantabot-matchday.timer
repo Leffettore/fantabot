@@ -1,0 +1,9 @@
+[Unit]
+Description=Run fantabot every Friday morning
+
+[Timer]
+OnCalendar=Fri *-*-* 09:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
