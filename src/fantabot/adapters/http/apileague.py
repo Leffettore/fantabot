@@ -66,6 +66,18 @@ CUSTOM_ROLES_PATH = "/onboarding/v1/league/custom-roles"
 CALENDAR_PATH = "/onboarding/v1/league/competition/calendar"
 DEFAULT_TIMEOUT = 10.0
 
+# CloudFront in front of the API answers a bare 403 `{"code":"FAIL"}` to a request that
+# lacks the frontend's `Origin` and a browser `User-Agent` (python-httpx's default is
+# refused); with both it reaches the app. Neither is a credential.
+_BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+    ),
+    "Origin": "https://leghe.fantacalcio.it",
+    "Referer": "https://leghe.fantacalcio.it/",
+}
+
 #: `league/teams` pages. The frontend asks for 50 and so do we; a lega of 8 fits in one
 #: page, and the loop below still follows `pages` because a lega of 60 does not.
 TEAMS_PAGE_SIZE = 50
@@ -151,7 +163,7 @@ def _send(
     one) and the `ValueError` a non-JSON body raises, mapping each to a token-free error.
     `raise_for` is the status mapper: `_raise_for` for reads, `_raise_for_lineup` for submit.
     """
-    headers = auth_headers(league_id, store=store, now=now)
+    headers = {**_BROWSER_HEADERS, **auth_headers(league_id, store=store, now=now)}
     content = None
     if body is not None:
         headers["Content-Type"] = "application/json"
